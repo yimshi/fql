@@ -1,0 +1,323 @@
+
+
+
+ginv<-function(X, tol = sqrt(.Machine$double.eps)){
+## Generalized Inverse of a Matrix
+  dnx <- dimnames(X)
+  if(is.null(dnx)) dnx <- vector("list", 2)
+  s <- svd(X)
+  nz <- s$d > tol * s$d[1]
+  structure(
+    if(any(nz)) s$v[, nz] %*% (t(s$u[, nz])/s$d[nz]) else X,
+    dimnames = dnx[2:1])
+}
+
+varest<-function(mi,mu,er,bw){
+   n=length(mu);ker=exp(-((mu-mi)/bw)^2/2)
+   An0=sum(ker)/(n*bw)
+   An1=sum(ker*(mu-mi))/(n*bw)
+   An2=sum(ker*((mu-mi)^2))/(n*bw)
+   WI=(ker*(An2-(mu-mi)*An1)/(An0*An2-An1^2))/(n*bw)
+   sigmu=sum(WI*er)
+   return(sigmu)
+}
+
+###################
+ 
+library(mgcv); library(MASS)
+i1<-100
+i2<-100
+m<-2
+n<-400
+p<-2
+bw=(4/3)^(1/5)*(n^(-1/5))
+
+datam<-matrix(0,nrow=n,ncol=(m+1))
+
+x<-matrix(0,ncol=m+1,nrow=n)
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+mu<-c(1:n)*0
+preci=0.00001
+COVS=matrix(0,2,2); COVS[1,1]=1; COVS[2,2]=1
+
+iters=200
+  
+estall=matrix(0, iters, 10); 
+
+for (III in 1:iters){
+
+set.seed(III)
+
+datam[,2:3]=mvrnorm(n,c(0,0),COVS); betas=c(0.5,-0.5)
+eta<-datam[,2:3]%*%betas
+
+for (i in 1:n){datam[i,1]<- rgamma(1,shape=exp(eta[i]),scale=1)}
+ 
+y<-datam[,1]; x[,-1]<-datam[,2:3]; x[,1]=1
+
+###########################################################################################
+##################################  parametric mode  l#####################################
+###########################################################################################
+    
+datas=data.frame(datam); datas[which(datas[,1]==0),1]=0.0001
+fitg<-gam(X1~X2+X3,family=Gamma(link="log"),data=datas)
+estall[III,7:10]=c(fitg$coefficients[2:3], summary(fitg)$se[-1])
+
+###########################################################################################
+############################################# Pnql ########################################
+###########################################################################################
+
+bnew<-c(1:(m+1))*0; bold<-bnew+0.1
+Di<-matrix(0,nrow=n,ncol=m+1); Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+Dp[row(Dp)==col(Dp)] <- 1; Dp[1:(m+1),1:(m+1)]<-0
+lambda<-0.01; iter2<-1
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+ for (i in 1:n){ Di[i,]<- mu[i]*x[i,] }
+ DV<-matrix(0,m+1,m+1);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])}
+
+ DY<-c(1:(m+1))*0; 
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])}
+ if(qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+} 
+bet<-bnew 
+ 
+########
+res=try(
+{
+bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&iter1<i1){
+bo<-bn; eta<-x%*%bo; mu<-exp(eta)
+
+datae[,1]<-(y-mu)^2; datae[,2]<-mu
+
+fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
+
+et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd)); 
+
+bnew=bo #bnew<-bet
+bold<-bnew+0.1; iter2<-1
+Di<-matrix(0,nrow=n,ncol=m+1)
+Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+1),1:(m+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+ 
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+ DV<-matrix(0,m+1,m+1)
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+ DY<-c(1:(m+1))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+ if (qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY } 
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+   
+   sigma=sum((y-mu)^2/as.vector(v))/(n-m)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+
+estall[III,1:6]=c(III,bn,DV[2,2],DV[3,3])
+}, silent = TRUE
+)
+
+if(inherits(res, "try-error")==TRUE|DVR<(m+1)){
+res1=try(
+{
+bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&iter1<i1){
+bo<-bn; eta<-x%*%bo; mu<-exp(eta);er=(y-mu)^2; v=mu*0
+
+for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+
+bnew=bo #bnew<-bet
+bold<-bnew+0.1; iter2<-1
+Di<-matrix(0,nrow=n,ncol=m+1)
+Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+1),1:(m+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)  
+ 
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+ DV<-matrix(0,m+1,m+1)
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+ DY<-c(1:(m+1))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+ if (qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY } 
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+   
+  eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+  Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+1,m+1);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+
+estall[III,1:6]=c(III,bn,DV[2,2],DV[3,3])
+}, silent = TRUE
+)
+
+
+if(inherits(res1, "try-error")==TRUE|DVR<(m+1)){
+ res2=try(
+{
+bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&iter1<i1){
+bo<-bn; eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+
+for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+3)}
+
+bnew=bo #bnew<-bet
+bold<-bnew+0.1; iter2<-1
+Di<-matrix(0,nrow=n,ncol=m+1)
+Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+1),1:(m+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+ 
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+ DV<-matrix(0,m+1,m+1)
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+ DY<-c(1:(m+1))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+ if (qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY } 
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+   
+   eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+  Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+1,m+1);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+
+estall[III,1:6]=c(III,bn,DV[2,2],DV[3,3])
+}, silent = TRUE
+)
+
+if(inherits(res2, "try-error")==TRUE|DVR<(m+1)){
+ res3=try(
+{
+bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&iter1<i1){
+bo<-bn; eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0+1;
+
+bnew=bo #bnew<-bet
+bold<-bnew+0.1; iter2<-1
+Di<-matrix(0,nrow=n,ncol=m+1)
+Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+1),1:(m+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+ 
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+ DV<-matrix(0,m+1,m+1)
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+ DY<-c(1:(m+1))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+ if (qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY } 
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+   
+   eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+  Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+1,m+1);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+
+estall[III,1:6]=c(III,bn,DV[2,2],DV[3,3])
+}, silent = TRUE
+)
+}
+}
+}
+print(c("iters",III))
+  
+}

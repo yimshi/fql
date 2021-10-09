@@ -1,0 +1,14 @@
+library(WindR)
+# install.packages("jsonlite")
+library(jsonlite)
+w.start()
+searchList <- w.wgel("B001","",pageIndex=1,pageSize=1)$Data[['details'],corpName="万得信息技术股份有限公司"]
+windid <- fromJSON(searchList)$source$items['windId']
+result <- w.wgel("B001",windid,"pageIndex=1;pageSize=1")$Data[['details']]
+bizData <- fromJSON(result)
+if (bizData$errorCode == 0) {
+  bizData$source
+}else {
+  bizData$errorCode
+  bizData$message
+}

@@ -1,0 +1,162 @@
+
+
+ ginv<-function(X, tol = sqrt(.Machine$double.eps)){
+   ## Generalized Inverse of a Matrix
+   dnx <- dimnames(X)
+   if(is.null(dnx)) dnx <- vector("list", 2)
+   s <- svd(X)
+   nz <- s$d > tol * s$d[1]
+   structure(
+     if(any(nz)) s$v[, nz] %*% (t(s$u[, nz])/s$d[nz]) else X,
+     dimnames = dnx[2:1])
+ }
+
+ varest<-function(mi,mu,er,bw){
+   n=length(mu);ker=exp(-((mu-mi)/bw)^2/2)
+   An0=sum(ker)/(n*bw)
+   An1=sum(ker*(mu-mi))/(n*bw)
+   An2=sum(ker*((mu-mi)^2))/(n*bw)
+   WI=(ker*(An2-(mu-mi)*An1)/(An0*An2-An1^2))/(n*bw)
+   sigmu=sum(WI*er)
+   return(sigmu)
+ }
+
+#flexible quasi-likelihood
+#lognormal rlnorm
+# E(log Y) != log E(Y)
+# log Y ~ N(meanlog, sdlog)
+# E(log Y) = meanlog
+# E(Y)= exp(meanlog + sdlog^2/2)
+# log E(Y)= meanlog + sdlog^2/2
+
+###logit link relative abundance
+###/ log link absolute abundance
+
+install.packages("E:/DTFILE/MEPS/fql/fql_0.1.1.tar.gz", repos = NULL, type = "source")
+library(mgcv); library(MASS);library(fql)
+III=1
+path<-paste0("E:/DTFILE/MEPS/simulation/nbinomu/",III,".csv")
+data=read.csv(path)
+datam<-as.matrix(data)
+set.seed(III)
+fql(y~x,data)
+
+data1<-cbind(demo,bmi.c,ffq.raw$aofib,ffq.raw$tfat,abund.list$Class[3,])
+colnames(data1)<-c(names(demo),'bmi','aofib','tfat','count')
+data1<-data1[,-6]
+sum(is.na(data1$count))
+colnames(data1)
+age<-demo$age
+age=as.numeric(age)-1
+demo$sex
+sex=as.numeric(demo$sex)-1
+sex
+#race w nw
+#log(totalcount)
+#standardize aofib tfat
+#count / 100
+#negative binomial
+data2<-data1[,c('count','sex','age','bmi','aofib','tfat')]
+data2$sex=sex
+data2$age=age
+count=data2$count
+data2$count=count/1000
+data2$bmi=as.numeric(scale(data2$bmi))
+data2$aofib=as.numeric(scale(data2$aofib))
+data2$tfat=as.numeric(scale(data2$tfat))
+#data2$count=log(count)
+data2
+
+result<-fql(count~sex+age+aofib+tfat+bmi,data2)
+data2$count=count
+fitg<-glm.nb(count~sex+age+aofib+tfat+bmi,link="log",data=data2)
+fitg
+result
+predict=predict(fitg,data2[,-1])
+mean(data2$count/1000-exp(predict)/1000)
+mean(abs(data2$count/1000-exp(predict)/1000))
+mean((data2$count/1000-exp(predict)/1000)^2)
+
+mean(data2$count/1000-as.numeric(result$muest))
+mean(abs(data2$count/1000-as.numeric(result$muest)))
+mean((data2$count/1000-as.numeric(result$muest))^2)
+
+
+#add total count as onset
+totalcount=colSums(abund.list$Class)
+logtc=log(totalcount)
+logtc
+data3=cbind(data2,logtc)
+head(data3)
+
+data3$count=count
+fitg1<-glm.nb(count~sex+age+aofib+tfat+bmi+logtc,link="log",data=data3)
+data3$count=count/1000
+result1<-fql(count~sex+age+aofib+tfat+bmi+logtc,data3)
+
+predict1=predict(fitg1,data3[,-1])
+
+#nb
+mean(data3$count-exp(predict1))
+mean(abs(data3$count-exp(predict1)))
+mean((data3$count-exp(predict1))^2)
+#fql
+mean(data3$count-1000*as.numeric(result1$muest))
+mean(abs(data3$count-1000*as.numeric(result1$muest)))
+mean((data3$count-1000*as.numeric(result1$muest))^2)
+
+
+#nb
+mean(log(data3$count)-predict1)
+mean(abs(log(data3$count)-predict1))
+mean((log(data3$count)-predict1)^2)
+#fql
+mean(log(data3$count)-log(1000*as.numeric(result1$muest)))
+mean(abs(log(data3$count)-log(1000*as.numeric(result1$muest))))
+mean((log(data3$count)-log(1000*as.numeric(result1$muest)))^2)
+
+
+head(data3)
+data4<-data2
+data4$count=count/totalcount
+head(data4)
+
+fitg2<-glm.nb(count~sex+age+aofib+tfat+bmi+offset(logtc),link="log",data=data5)
+result2<-fql(count~sex+age+aofib+tfat+bmi+offset(logtc),data5)
+poi2<-glm(count~sex+age+aofib+tfat+offset(logtc),data=data5,family = poisson(link="log"))
+result
+library(betareg)
+
+
+result<-fql(count~sex+age+aofib+tfat+offset(logtc),data5)
+result2<-fql(count~sex+age+aofib+tfat+bmi+offset(logtc),data5)
+gamma<-glm(count~sex+age+aofib+tfat+offset(logtc),data=data5,family = Gamma(link="log"))
+nb<-glm.nb(count~sex+age+aofib+tfat+offset(logtc),link="log",data=data5)
+summary(fitg)
+result
+
+data5<-data3
+data5$count=count
+data5$logtc=log(totalcount)
+head(data5)
+summary(fitg)
+
+head(data2)
+data2$count=count/totalcount
+result3<-fql(count~sex+tfat,data5)
+
+#poisson comparison
+#gamma
+#mu variance distribution plot
+poi<-glm(count~sex+age+aofib+tfat+bmi+offset(logtc),family=poisson(link="log"),data=data5)
+logv<-log(as.numeric(result$v))
+v<-as.numeric(result$v)
+mu<-as.numeric(result$mu)
+muv<-data.frame(mu,v)
+mulogv<-data.frame(mu,logv)
+head(muv)
+library(ggplot2)
+ggplot(data=mulogv,mapping = aes(x=mu,y=logv))+geom_smooth()
+ggplot(data=muv,mapping = aes(x=mu,y=v))+geom_smooth()
+
+data5

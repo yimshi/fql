@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1628867085293.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1033921694",
+    "id" : "4FAD8CDF",
+    "lastKnownWriteTime" : 1633748491,
+    "last_content_update" : 1633748491755,
+    "path" : "E:/DTFILE/MEPS/fql/fql/R/fql.R",
+    "project_path" : "R/fql.R",
+    "properties" : {
+        "cursorPosition" : "25,38",
+        "scrollLine" : "19"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

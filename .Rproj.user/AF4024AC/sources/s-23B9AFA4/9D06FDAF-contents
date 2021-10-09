@@ -1,0 +1,387 @@
+
+ ginv<-function(X, tol = sqrt(.Machine$double.eps)){
+   ## Generalized Inverse of a Matrix
+   dnx <- dimnames(X)
+   if(is.null(dnx)) dnx <- vector("list", 2)
+   s <- svd(X)
+   nz <- s$d > tol * s$d[1]
+   structure(
+     if(any(nz)) s$v[, nz] %*% (t(s$u[, nz])/s$d[nz]) else X,
+     dimnames = dnx[2:1])
+ }
+
+ varest<-function(mi,mu,er,bw){
+   n=length(mu);ker=exp(-((mu-mi)/bw)^2/2)
+   An0=sum(ker)/(n*bw)
+   An1=sum(ker*(mu-mi))/(n*bw)
+   An2=sum(ker*((mu-mi)^2))/(n*bw)
+   WI=(ker*(An2-(mu-mi)*An1)/(An0*An2-An1^2))/(n*bw)
+   sigmu=sum(WI*er)
+   return(sigmu)
+ }
+
+#flexible quasi-likelihood
+#lognormal rlnorm
+# E(log Y) != log E(Y)
+# log Y ~ N(meanlog, sdlog)
+# E(log Y) = meanlog
+# E(Y)= exp(meanlog + sdlog^2/2)
+# log E(Y)= meanlog + sdlog^2/2
+
+fql<-function (formula, data, na.action,preci=0.00001)
+{
+  n=dim(data)[1]
+  p<-2
+  bw=(4/3)^(1/5)*(n^(-1/5))
+  m=length(all.vars(formula))-1
+
+  mf<-model.frame(formula=formula, data=data)
+  mt <- attr(mf, "terms")
+  y <- model.response(mf, "numeric")
+  x <- model.matrix(mt, mf, contrasts)
+#  x2<-matrix(as.numeric(x),ncol=m+1,nrow=n)
+
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+mu<-c(1:n)*0
+
+
+  #estall=matrix(0, 1, 10);
+
+  datam<-as.matrix(data)
+
+
+  ###########################################################################################
+  ##################################  parametric mode  l#####################################
+  ###########################################################################################
+
+  datas=data.frame(datam); datas[which(datas[,1]==0),1]=0.0001
+  fitg<-gam(y~x,family=Gamma(link="log"),data=datas)
+  #estall[1,6:7]=c(fitg$coefficients[2], summary(fitg)$se[-1])
+
+  ###########################################################################################
+  ############################################# Pnql ########################################
+  ###########################################################################################
+
+  # Initial step: assume constant vi for all subjects
+
+  bnew<-c(1:(m+1))*0; bold<-bnew+0.1
+  Di<-matrix(0,nrow=n,ncol=m+1); Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+  Dp[row(Dp)==col(Dp)] <- 1; Dp[1:(m+1),1:(m+1)]<-0
+  lambda<-0.01; iter2<-1
+
+
+  while (max(abs(bnew-bold))>preci&iter2<i2)
+  {
+    bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+    for (i in 1:n){ Di[i,]<- mu[i]*x[i,] }
+    DV<-matrix(0,m+1,m+1);
+    for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])}
+
+    DY<-c(1:(m+1))*0;
+    for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])}
+    if(qr(DV)$rank==(m+1)){
+      bnew<-bold+qr.solve(DV,DY)
+    }else{
+      bnew<-bold+ginv(DV)%*%DY}
+    iter2<-iter2+1
+  }
+
+  bet<-bnew
+
+  ########
+  # Use spline to estimate vi
+
+  res=try(
+    {
+      bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+      while (max(abs(bn-bo))>preci&iter1<i1){
+        bo<-bn; eta<-x%*%bo; mu<-exp(eta)
+
+        datae[,1]<-log((y-mu)^2); datae[,2]<-mu
+
+        # Fit the function of V
+
+        fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="identity"),data=datae)
+        #may have some error on estimation of v
+        et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd));
+        bnew=bo #bnew<-bet
+        bold<-bnew+0.1; iter2<-1
+        Di<-matrix(0,nrow=n,ncol=m+1)
+        Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+        Dp[row(Dp)==col(Dp)] <- 1
+        Dp[1:(m+1),1:(m+1)]<-0
+
+        # vi's are now different for different subjects, re-estimate beta in Step 2
+
+        while (max(abs(bnew-bold))>preci&iter2<i2){
+
+          bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+          for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+          DV<-matrix(0,m+1,m+1)
+          for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+          DY<-c(1:(m+1))*0
+          for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+          if (qr(DV)$rank==(m+1)){
+            bnew<-bold+qr.solve(DV,DY)
+          }else{
+            bnew<-bold+ginv(DV)%*%DY }
+          iter2<-iter2+1
+        } # end while in line 122
+
+        bn<-bnew
+        iter1<-iter1+1
+
+      } # end while in line 102
+
+      # Sigma is the center piece in Eqn. (5)
+      Sigma<-matrix(0,m+1,m+1);
+      for (i in 1:n){Sigma<-Sigma+Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2/(v[i])^2}
+      #sigma=(y-mu)/as.vector(v)/(n-m)
+      DVR=qr(DV)$rank
+      if(DVR==(m+1)){
+        DV.I<-qr.solve(DV)
+      }else{
+        DV.I<-ginv(DV)
+      }
+      DV1=DV.I%*%Sigma%*%DV.I # Eqn (5)
+
+      #estall[1,1:5]=c(1,bn,DV1[1,1],DV1[2,2])
+      #estall[1,8]=mean(er)
+      #estall[1,10]=0
+      step=0
+      meanerror=mean(er)
+      #estall=list(bn,DV1,meanerror,step,fite2$fitted.values)
+      estall=list(coefficients=bn,covariance=DV1,meanerror=meanerror,step=step)
+      estall$fittedvalues=fite2$fitted.values
+      }, silent = T
+
+  ) # end of try in line 101
+
+  # Use another method to estimate vi: kernel method
+
+  if(inherits(res, "try-error")==TRUE|DVR<(m+1))
+  {
+    res1=try(
+      {
+        bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+        while (max(abs(bn-bo))>preci&iter1<i1){
+          bo<-bn; eta<-x%*%bo; mu<-exp(eta);er=(y-mu)^2; v=mu*0
+
+          for (i in 1:n)  {v[i]=varest(mu[i],mu,er,bw+1)}
+
+          bnew=bo #bnew<-bet
+          bold<-bnew+0.1; iter2<-1
+          Di<-matrix(0,nrow=n,ncol=m+1)
+          Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+          Dp[row(Dp)==col(Dp)] <- 1
+          Dp[1:(m+1),1:(m+1)]<-0
+
+          while (max(abs(bnew-bold))>preci&iter2<i2){
+
+            bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+            for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+            DV<-matrix(0,m+1,m+1)
+            for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+            DY<-c(1:(m+1))*0
+            for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+            if (qr(DV)$rank==(m+1)){
+              bnew<-bold+qr.solve(DV,DY)
+            }else{
+              bnew<-bold+ginv(DV)%*%DY }
+            iter2<-iter2+1
+          }
+
+          bn<-bnew
+          iter1<-iter1+1
+        }
+
+        eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+        for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+        Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+        DV<-matrix(0,m+1,m+1);
+        for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+        Sigma<-matrix(0,m+1,m+1);
+        for (i in 1:n){Sigma<-Sigma+Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2/(v[i])^2}
+        #sigma=(y-mu)/as.vector(v)/(n-m)
+        DVR=qr(DV)$rank
+        if(DVR==(m+1)){
+          DV.I<-qr.solve(DV)
+        }
+        else{
+          DV.I<-ginv(DV)
+        }
+        DV1=DV.I%*%Sigma%*%DV.I
+
+        #estall[1,1:5]=c(1,bn,DV1[1,1],DV1[2,2])
+        #estall[1,9]=mean(er)
+        #estall[1,10]=1
+        step=1
+        meanerror=mean(er)
+        #estall=list(bn,DV1,meanerror,step)
+        estall=list(coefficients=bn,covariance=DV1,meanerror=meanerror,step=step)
+      }, silent = TRUE
+    ) # end of try in line 172
+
+    # Use bw+3 instead of bw+1 in varest(), and rerun
+
+    if(inherits(res1, "try-error")==TRUE|DVR<(m+1)){
+      res2=try(
+        {
+          bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+          while (max(abs(bn-bo))>preci&iter1<i1)
+          {
+            bo<-bn; eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+
+
+            for (i in 1:n)  {v[i]=varest(mu[i],mu,er,bw+3)}
+
+            bnew=bo #bnew<-bet
+            bold<-bnew+0.1; iter2<-1
+            Di<-matrix(0,nrow=n,ncol=m+1)
+            Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+            Dp[row(Dp)==col(Dp)] <- 1
+            Dp[1:(m+1),1:(m+1)]<-0
+
+            while (max(abs(bnew-bold))>preci&iter2<i2)
+            {
+
+              bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+              for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+              DV<-matrix(0,m+1,m+1)
+              for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+              DY<-c(1:(m+1))*0
+              for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+              if (qr(DV)$rank==(m+1)){
+                bnew<-bold+qr.solve(DV,DY)
+              }else{
+                bnew<-bold+ginv(DV)%*%DY }
+              iter2<-iter2+1
+            } # end of while in line 255
+
+            bn<-bnew
+            iter1<-iter1+1
+          } # end of while in line 240
+
+          eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+          for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+          Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+          DV<-matrix(0,m+1,m+1);
+          for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+          Sigma<-matrix(0,m+1,m+1);
+          for (i in 1:n){Sigma<-Sigma+Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2/(v[i])^2}
+          #sigma=(y-mu)/as.vector(v)/(n-m)
+          DVR=qr(DV)$rank
+          if(DVR==(m+1)){
+            DV.I<-qr.solve(DV)
+          }
+          else{
+            DV.I<-ginv(DV)
+          }
+
+          DV1=DV.I%*%Sigma%*%DV.I
+          #estall[1,1:5]=c(1,bn,DV1[1,1],DV1[2,2])
+          #estall[1,9]=mean(er)
+          #estall[1,10]=2
+          step=2
+          meanerror=mean(er)
+          estall=list(coefficients=bn,covariance=DV1,meanerror=meanerror,step=step)
+        }, silent = TRUE
+      )
+
+      # If problem still exists, use vi=1 for all subjects
+
+      if(inherits(res2, "try-error")==TRUE|DVR<(m+1))
+      {
+        res3=try(
+          {
+            bn<-bet; bo<-bn+0.1; iter1<-1; DVR=1
+
+            while (max(abs(bn-bo))>preci&iter1<i1)
+            {
+              bo<-bn; eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0+1;
+
+              bnew=bo #bnew<-bet
+              bold<-bnew+0.1; iter2<-1
+              Di<-matrix(0,nrow=n,ncol=m+1)
+              Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+              Dp[row(Dp)==col(Dp)] <- 1
+              Dp[1:(m+1),1:(m+1)]<-0
+
+              while (max(abs(bnew-bold))>preci&iter2<i2){
+
+                bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+                for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+                DV<-matrix(0,m+1,m+1)
+                for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+
+                DY<-c(1:(m+1))*0
+                for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+                if (qr(DV)$rank==(m+1)){
+                  bnew<-bold+qr.solve(DV,DY)
+                }else{
+                  bnew<-bold+ginv(DV)%*%DY }
+                iter2<-iter2+1
+              }
+
+              bn<-bnew
+              iter1<-iter1+1
+            } # end of while in line 308
+
+            eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+            for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+            Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+            DV<-matrix(0,m+1,m+1);
+            for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+            Sigma<-matrix(0,m+1,m+1);
+            for (i in 1:n){Sigma<-Sigma+Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2/(v[i])^2}
+            #sigma=(y-mu)/as.vector(v)/(n-m)
+            DVR=qr(DV)$rank
+            if(DVR==(m+1)){
+              DV.I<-qr.solve(DV)
+            }
+            else{
+              DV.I<-ginv(DV)
+            }
+            DV1=DV.I%*%Sigma%*%DV.I
+
+            #estall[1,1:5]=c(1,bn,DV1[1,1],DV1[2,2])
+            #estall[1,9]=mean(er)
+            #estall[1,10]=3
+            step=3
+            meanerror=mean(er)
+            estall=list(coefficients=bn,covariance=DV1,meanerror=meanerror,step=step)
+            #estall[1,12]=mean(abs(er))
+            #estall[1,13]=mean(er^2)
+          }, silent = TRUE
+        ) # end of try in line 304
+      } # end of if in line 303
+    }
+
+
+
+
+  }
+ return(estall)
+}
+

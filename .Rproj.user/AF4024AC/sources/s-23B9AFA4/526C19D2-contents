@@ -1,0 +1,530 @@
+
+
+#################################################################################################
+########################################   Start of Functions####################################
+#################################################################################################
+
+addbasis01<-function(x,degree=p,nknots=nk,z=NA,xforknots=x,der=0,jder=1,nsubknots=0){
+    my.x <- x
+ 
+    x<-as.matrix(x); xforknots<-as.matrix(xforknots); z<-as.matrix(z)
+ 
+    nknots <- c(nknots) 
+ 
+    degree <- c(degree); der <- c(der); jder <- c(jder); nsubknots <- c(nsubknots)
+
+   n<-NROW(x); d<-NCOL(x)
+   if (der == 0) xm <- rep(1,n)
+   else xm <- rep(0,n)
+   if (!is.na(z)) xm <- cbind(xm,(der==0)*z)
+   if (length(nknots)==1) nknots <- rep(nknots,d)
+   maxnknots <- max(nknots)
+   knots <- matrix(0,maxnknots,d)
+   if (nsubknots > 0) subknots <- matrix(0,nsubknots,d)
+   else subknots <- NA
+
+   for (j in 1:d){
+      xunique <- unique(c(xforknots[,j]))
+      knots[1:(nknots[j]),j] <- quantileknots(xunique,nknots[j])
+      if (nsubknots > 0){
+         xunique2 <- xuniqute[(xunique>knots[1,j] & xunique<knots[nknots[j],j])]
+          subknots2 <- quantileknots(xunique2,nsubknots-2)
+          subknots[,j] <- c(knots[1,j],subknots2,knots[nknots[j],j])
+       }
+       xmj <- powerbasis(x[,j],degree,knots[1:nknots[j],j],der)
+       if (der>0 & j!=jder) xmj <- 0*xmj
+       xm <- cbind(xm,xmj[,2:NCOL(xmj)])
+       # xm is the "design matrix" of the regression spline
+    }
+    
+    return(list(xm=xm,knots=knots,subknots=subknots))
+ }
+
+quantileknots<-function(x,nknots,boundstab=0){
+  x <- c(x)
+
+  nknots <- c(nknots)
+
+  n <- length(x)
+   xsort <- sort(x)
+   loc <- n*c(1:(nknots+2*boundstab))/(nknots+1+2*boundstab)
+   knots <- xsort[round(loc)]
+   knots <- knots[(1:nknots)+boundstab]
+   
+   return(knots) 
+}
+
+powerbasis<-function(x,degree,knots,der=0){
+
+  x <- c(x); knots <- c(knots)
+ 
+  degree <- c(degree)
+
+  if (der>degree) print("WARNING: der > degree --- xm not returned by powerbasis")
+   n <- length(x)
+   nknots <- length(knots)
+
+   if (der==0) xm <- rep(1,n)
+   else xm <- rep(0,n)
+
+   for (i in 1:degree){
+      if (i<der) xm <- cbind(xm,0)
+      else {
+         if (i-der+1 <= i) t0 <- prod((i-der+1):i)
+         else t0 <- 1
+         xm <- cbind(xm,t0*x^(i-der))
+      }
+   }
+
+   if (nknots>0) {
+      for (i in 1:nknots){
+         if (degree-der+1 <= degree) t0 <- prod((degree-der+1):degree)
+         else t0 <- 1
+         xm <- cbind(xm,t0*(x-knots[i])^(degree-der)*(x>knots[i]))
+      }
+   }
+
+   return(xm)
+}
+
+ginv<-function(X, tol = sqrt(.Machine$double.eps)){
+  dnx <- dimnames(X)
+  if(is.null(dnx)) dnx <- vector("list", 2)
+  s <- svd(X)
+  nz <- s$d > tol * s$d[1]
+  structure(
+    if(any(nz)) s$v[, nz] %*% (t(s$u[, nz])/s$d[nz]) else X,
+    dimnames = dnx[2:1])
+}
+
+varest<-function(mi,mu,er,bw){
+   n=length(mu);ker=exp(-((mu-mi)/bw)^2/2)
+   An0=sum(ker)/(n*bw)
+   An1=sum(ker*(mu-mi))/(n*bw)
+   An2=sum(ker*((mu-mi)^2))/(n*bw)
+   WI=(ker*(An2-(mu-mi)*An1)/(An0*An2-An1^2))/(n*bw)
+   sigmu=sum(WI*er)
+   return(sigmu)
+}
+
+#####################################################################################################
+##########################################   End of Functions  ######################################
+#####################################################################################################
+
+#####################################################################################################
+##########################################   read data matrix  ######################################
+#####################################################################################################
+
+#aa<-read.csv(file="datafile")       
+# data file has m+2 columns, the first column is response variable, the 2:(m+1) columns are m linear covariate, the (m+2) column is nonlinear covariate
+aa=read.csv(file="E:/DTFILE/MEPS/pglm (1)/MEPSTRAIN1.csv")
+attach(aa)
+datam<-as.matrix(aa)
+datam<-cbind(datam[,36],datam[,c(4,6:30,32:34)],datam[,5])
+
+dim(aa)
+head(aa)
+length(datam)
+dim(datam)
+head(datam)
+#####################################################################################################
+
+varbetas=c(1:(m+1+p+nk))*0   
+fit=c(1:n)*0; fvar=c(1:n)*0
+
+library(mgcv)
+i1<-100; i2<-200
+m<-29; n=length(datam[,1])
+p<-2; nk<-10; bw=(4/3)^(1/5)*(n^(-1/5))
+preci=0.000001
+theta1<-0.5
+iter<-20
+e<-matrix(0,ncol=2+p+nk,nrow=n)
+ll<-c(1:iter)
+ll[1]<-(-6)
+for (I in 2:iter){
+ll[I]<-ll[I-1]+9/iter}
+lambs<-10^ll
+GCVs<-matrix(0,ncol=2,nrow=(iter))
+WW<-matrix(0,ncol=n,nrow=n)
+covb<-matrix(0,m+1+p+nk,m+1+p+nk)
+datae<-data.frame(matrix(0,nrow=n,ncol=2)); sev=c(1:(m+1+p+nk))*0
+
+y=datam[,1]
+
+TT<-datam[,31]
+
+res<-addbasis01(TT,degree=p,nknots=nk,z=NA,xforknots=TT,der=0,jder=1,nsubknots=0)
+basis<-res$xm
+dim(basis)
+basis
+datas<-matrix(0,nrow=n,ncol=m+2+p+nk) 
+datas[,1:(1+m)]<-datam[,1:(1+m)]; datas[,(2+m):(m+2+p+nk)]<-basis
+x<-matrix(0,ncol=m+1+p+nk,nrow=n)
+x[,1:m]<-datam[,2:(1+m)]; x[,(1+m):(m+1+p+nk)]<-basis
+
+bnew<-c(1:(m+1+p+nk))*0; bold<-bnew+0.1
+Di<-matrix(0,nrow=n,ncol=m+1+p+nk); Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1; Dp[1:(m+p+1),1:(m+p+1)]<-0
+lambda<-0.01; iter2<-1
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+eta
+mu
+ for (i in 1:n){ Di[i,]<- mu[i]*x[i,] }
+Di
+ DV<-matrix(0,m+p+1+nk,m+1+p+nk);  
+ DV
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])}
+ DV<-DV+lambda*Dp
+
+ DY<-c(1:(m+1+p+nk))*0; 
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])}
+ DY<-DY-lambda*Dp%*%bold
+ print(DV)
+ print(dim(DV))
+ if(qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ bnew
+ bold
+ iter2<-iter2+1
+} 
+ 
+bet<-bnew    ## bet initial estimates 
+
+########
+res=try(
+{
+bn<-bet; bo<-bn+0.1;boo=bo; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&max(abs(bn-boo))>preci&iter1<i1){
+boo=bo; bo<-bn; eta<-x%*%bo; mu<-exp(eta)
+
+datae[,1]<-(y-mu)^2; datae[,2]<-mu
+
+fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
+
+et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd)); 
+
+GCVs=GCVs*0
+
+for(JJ in 1:iter){
+bnew=bo
+bold<-bnew+0.1; iter2<-1
+Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+p+1),1:(m+p+1)]<-0
+lambda<-lambs[JJ]
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+ 
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+
+ DV<-matrix(0,m+1+p+nk,m+1+p+nk)
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+ DV<-DV+lambda*Dp
+
+ DY<-c(1:(m+1+p+nk))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+ DY<-DY-lambda*Dp%*%bold
+
+ if (qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY } 
+ iter2<-iter2+1
+}
+
+for (I in 1:n){WW[I,I]<-mu[I]^2/v[I]}
+GCVs[JJ,1]<-JJ
+ker<-t(x)%*%WW%*%x+lambda*Dp
+if(qr(ker)$rank==(m+1+p+nk)){H<-x%*%qr.solve(ker)%*%t(x)%*%WW
+}else{H=x%*%ginv(ker)%*%t(x)%*%WW}
+GCVs[JJ,2]<-(t((y-H%*%y))%*%WW%*%(y-H%*%y)/n)/(1-sum(diag(H))/n)^2
+}
+
+tgcv<-sort(GCVs[,2]); 
+if (GCVs[which(GCVs[,2]==tgcv[1]),1][1]==iter|GCVs[which(GCVs[,2]==tgcv[1]),1][1]==1){lambda=lambs[10]
+}else{lambda<-lambs[GCVs[which(GCVs[,2]==tgcv[1]),1]][1]}
+
+bnew<-bo; bold<-bnew+0.1
+iter2<-1
+Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+p+1),1:(m+p+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+ 
+ Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+ DV<-matrix(0,m+p+1+nk,m+1+p+nk); DVI<-DV; 
+ for (i in 1:n){
+  DV<-DV+Di[i,]%*%t(Di[i,])/v[i]
+    DVI<-DVI+(Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2)/(v[i]^2)
+ }
+ DV<-DV+lambda*Dp
+ 
+ DY<-c(1:(m+1+p+nk))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+ DY<-DY-lambda*Dp%*%bold
+ if(qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+  
+  eta<-x%*%bn; mu<-exp(eta); datae[,1]<-(y-mu)^2; datae[,2]<-mu
+  fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
+  newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd))
+  Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+  for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+p+1+nk,m+1+p+nk); 
+  for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m-p-nk)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1+p+nk)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+  
+fit<-x[,(m+2):(m+1+p+nk)]%*%bn[(m+2):(m+1+p+nk)]; 
+for (J in 1:n){fvar[J]<-t(x[J,(m+2):(m+1+p+nk)])%*%DV[(m+2):(m+1+p+nk),(m+2):(m+1+p+nk)]%*%x[J,(m+2):(m+1+p+nk)]}
+for (J in 1:(m+1+p+nk)){varbetas[J]=DV[J,J]}
+}, silent = TRUE
+)
+
+if(inherits(res, "try-error")==TRUE|DVR<(m+1+p+nk)|min(varbetas)<1e-6){
+if(lambda==lambs[1]){lambda=lambs[round(iter/2)]}
+ res1=try(
+{
+bn<-bet; bo<-bn+0.1;boo=bo; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&max(abs(bn-boo))>preci&iter1<i1){
+boo=bo; bo<-bn;  eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+ 
+ for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+
+bnew<-bo; bold<-bnew+0.1
+iter2<-1
+Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+p+1),1:(m+p+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta); 
+ 
+ Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+ DV<-matrix(0,m+p+1+nk,m+1+p+nk); DVI<-DV; 
+ for (i in 1:n){
+  DV<-DV+Di[i,]%*%t(Di[i,])/v[i]
+  DVI<-DVI+(Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2)/(v[i]^2)
+ }
+ DV<-DV+lambda*Dp
+ 
+ DY<-c(1:(m+1+p+nk))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+ DY<-DY-lambda*Dp%*%bold
+ if(qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+ 
+  eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+  Di<-matrix(0,nrow=n,ncol=m+1+p+nk); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+p+1+nk,m+1+p+nk);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m-p-nk)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1+p+nk)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+  
+fit<-x[,(m+2):(m+1+p+nk)]%*%bn[(m+2):(m+1+p+nk)]; 
+for (J in 1:n){fvar[J]<-t(x[J,(m+2):(m+1+p+nk)])%*%DV[(m+2):(m+1+p+nk),(m+2):(m+1+p+nk)]%*%x[J,(m+2):(m+1+p+nk)]}
+for (J in 1:(m+1+p+nk)){varbetas[J]=DV[J,J]}
+}, silent = TRUE
+) 
+
+if(inherits(res1, "try-error")==TRUE|DVR<(m+1+p+nk)|min(varbetas)<1e-6){
+ res2=try(
+{
+bn<-bet; bo<-bn+0.1;boo=bo; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&max(abs(bn-boo))>preci&iter1<i1){
+boo=bo; bo<-bn;  eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+ 
+ for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+
+bnew<-bo; bold<-bnew+0.1
+iter2<-1
+Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+p+1),1:(m+p+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta); 
+ 
+ Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+ DV<-matrix(0,m+p+1+nk,m+1+p+nk); DVI<-DV; 
+ for (i in 1:n){
+  DV<-DV+Di[i,]%*%t(Di[i,])/v[i]
+  DVI<-DVI+(Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2)/(v[i]^2)
+ }
+ DV<-DV+lambda*Dp
+ 
+ DY<-c(1:(m+1+p+nk))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+ DY<-DY-lambda*Dp%*%bold
+ if(qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+
+ bpnql<-c(1,lambda,bn)
+  
+  eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+  Di<-matrix(0,nrow=n,ncol=m+1+p+nk); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+p+1+nk,m+1+p+nk);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m-p-nk)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1+p+nk)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+  
+fit<-x[,(m+2):(m+1+p+nk)]%*%bn[(m+2):(m+1+p+nk)]; 
+for (J in 1:n){fvar[J]<-t(x[J,(m+2):(m+1+p+nk)])%*%DV[(m+2):(m+1+p+nk),(m+2):(m+1+p+nk)]%*%x[J,(m+2):(m+1+p+nk)]}
+for (J in 1:(m+1+p+nk)){varbetas[J]=DV[J,J]}
+}, silent = TRUE
+)
+
+if(inherits(res2, "try-error")==TRUE|DVR<(m+1+p+nk)|min(varbetas)<1e-6){
+  res3=try(
+{
+bn<-bet; bo<-bn+0.1;boo=bo; iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&max(abs(bn-boo))>preci&iter1<i1){
+boo=bo; bo<-bn;  eta<-x%*%bo; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+ 
+ for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+3)}
+
+bnew<-bo; bold<-bnew+0.1
+iter2<-1
+Dp<-matrix(0,nrow=(m+1+p+nk),ncol=(m+1+p+nk))
+Dp[row(Dp)==col(Dp)] <- 1
+Dp[1:(m+p+1),1:(m+p+1)]<-0
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta); 
+ 
+ Di<-matrix(0,nrow=n,ncol=m+1+p+nk)
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+ DV<-matrix(0,m+p+1+nk,m+1+p+nk); DVI<-DV; 
+ for (i in 1:n){
+  DV<-DV+Di[i,]%*%t(Di[i,])/v[i]
+  DVI<-DVI+(Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2)/(v[i]^2)
+ }
+ DV<-DV+lambda*Dp
+ 
+ DY<-c(1:(m+1+p+nk))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+ DY<-DY-lambda*Dp%*%bold
+ if(qr(DV)$rank==(m+1+p+nk)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+}
+
+ bn<-bnew    
+ iter1<-iter1+1
+}
+  
+  eta<-x%*%bn; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+3)}
+  Di<-matrix(0,nrow=n,ncol=m+1+p+nk); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+p+1+nk,m+1+p+nk);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m-p-nk)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1+p+nk)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+  
+fit<-x[,(m+2):(m+1+p+nk)]%*%bn[(m+2):(m+1+p+nk)]; 
+for (J in 1:n){fvar[J]<-t(x[J,(m+2):(m+1+p+nk)])%*%DV[(m+2):(m+1+p+nk),(m+2):(m+1+p+nk)]%*%x[J,(m+2):(m+1+p+nk)]}
+for (J in 1:(m+1+p+nk)){varbetas[J]=DV[J,J]}
+}, silent = TRUE
+)
+
+if(inherits(res3, "try-error")==TRUE|DVR<(m+1+p+nk)|min(varbetas)<1e-6){
+
+ eta<-x%*%bet; mu<-exp(eta); er=(y-mu)^2; v=mu*0
+  for (i in 1:n){v[i]=varest(mu[i],mu,er,bw)}
+  if(is.na(max(v))){for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}}
+  Di<-matrix(0,nrow=n,ncol=m+1+p+nk); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+p+1+nk,m+1+p+nk);  
+ for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m-p-nk)
+  
+  if(qr(DV)$rank==(m+1+p+nk)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+  
+fit<-x[,(m+2):(m+1+p+nk)]%*%bn[(m+2):(m+1+p+nk)]; 
+for (J in 1:n){fvar[J]<-t(x[J,(m+2):(m+1+p+nk)])%*%DV[(m+2):(m+1+p+nk),(m+2):(m+1+p+nk)]%*%x[J,(m+2):(m+1+p+nk)]}
+for (J in 1:(m+1+p+nk)){varbetas[J]=DV[J,J]}
+
+}}}}
+
+#######################################################################################################
+############################################## Results ################################################
+#######################################################################################################
+
+#########################  coefficient est. for linear covaraites################################
+bn[1:m]
+#########################  variance of coef. est. for linear covaraites##########################
+varbetas[1:m]
+
+#########################  est. curve for nonlienar covaraite ##########################
+fit
+###################  variance of est. curve for nonlienar covaraite ####################
+fvar
+

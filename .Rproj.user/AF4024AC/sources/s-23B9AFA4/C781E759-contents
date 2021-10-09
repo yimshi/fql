@@ -1,0 +1,146 @@
+library(mgcv); library(MASS)
+i1<-100
+i2<-100
+m<-1
+n<-600
+p<-2
+
+
+
+x<-matrix(0,ncol=m+1,nrow=n)
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+mu<-c(1:n)*0
+preci=0.00001
+COVS=matrix(0,2,2); COVS[1,1]=1; COVS[2,2]=1
+
+iters=600
+
+estall=matrix(0, iters, 8);
+
+#III=1
+for (III in 1:iters)
+{
+  
+  path<-paste0("E:/DTFILE/MEPS/simulation/nbinom/",III,".csv")
+  data=read.csv(path)
+  datam<-as.matrix(data)
+  set.seed(III)
+  
+  
+  y<-datam[,1]; x[,-1]<-datam[,2]; x[,1]=1
+  
+  ###########################################################################################
+  ##################################  parametric mode  l#####################################
+  ###########################################################################################
+  
+  datas=data.frame(datam); #datas[which(datas[,1]==0),1]=0.0001
+  fitg<-glm.nb(y~x,link="log",data=datas)
+  #fitg$coefficients
+  #fitg<-glm(y~x,negative.binomial(theta=1,link="log"),data=datas)
+  estall[III,1:8]=c(summary(fitg)$coefficients[1,], summary(fitg)$coefficients[2,])
+  #Estimate   Std. Error      z value     Pr(>|z|)
+}
+write.csv(estall,"E:/DTFILE/MEPS/simulation/nbinom/NBR_NBINOM_result.csv")
+
+
+##gamma regression
+estall2=matrix(0, iters, 8);
+x<-matrix(0,ncol=m+1,nrow=n)
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+
+
+
+#III=1
+for (III in 1:iters)
+{
+  
+  path<-paste0("E:/DTFILE/MEPS/simulation/nbinom/",III,".csv")
+  data=read.csv(path)
+  datam<-as.matrix(data)
+  set.seed(III)
+  
+  
+  y<-datam[,1]; x[,-1]<-datam[,2]; x[,1]=1
+  
+  ###########################################################################################
+  ##################################  parametric mode  l#####################################
+  ###########################################################################################
+  
+  datas=data.frame(datam); datas[which(datas[,1]==0),1]=0.0001
+  #fitg<-glm.nb(y~x,link="log",data=datas)
+  #fitg$coefficients
+  fitg<-glm(y~x,Gamma(link="log"),data=datas)
+  estall2[III,1:8]=c(summary(fitg)$coefficients[1,], summary(fitg)$coefficients[2,])
+  #Estimate   Std. Error      z value     Pr(>|z|)
+}
+write.csv(estall2,"E:/DTFILE/MEPS/simulation/nbinom/GR_NBINOM_result.csv")
+
+
+##poission regression
+estall3=matrix(0, iters, 8);
+x<-matrix(0,ncol=m+1,nrow=n)
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+
+
+
+#III=1
+for (III in 1:iters)
+{
+  
+  path<-paste0("E:/DTFILE/MEPS/simulation/nbinom/",III,".csv")
+  data=read.csv(path)
+  datam<-as.matrix(data)
+  set.seed(III)
+  
+  
+  y<-datam[,1]; x[,-1]<-datam[,2]; x[,1]=1
+  
+  ###########################################################################################
+  ##################################  parametric mode  l#####################################
+  ###########################################################################################
+  
+  datas=data.frame(datam); datas[which(datas[,1]==0),1]=0.0001
+  #fitg<-glm.nb(y~x,link="log",data=datas)
+  #fitg$coefficients
+  fitg<-glm(y~x,poisson(link="log"),data=datas)
+  estall3[III,1:8]=c(summary(fitg)$coefficients[1,], summary(fitg)$coefficients[2,])
+  #Estimate   Std. Error      z value     Pr(>|z|)
+}
+write.csv(estall3,"E:/DTFILE/MEPS/simulation/nbinom/PR_NBINOM_result.csv")
+
+##inverse-gaussian regression
+estall4=matrix(0, iters, 8);
+x<-matrix(0,ncol=m+1,nrow=n)
+datae<-data.frame(matrix(0,nrow=n,ncol=2))
+dataee<-datae
+
+
+
+#III=1
+for (III in 1:iters)
+{
+  
+  path<-paste0("E:/DTFILE/MEPS/simulation/nbinom/",III,".csv")
+  data=read.csv(path)
+  datam<-as.matrix(data)
+  set.seed(III)
+  
+  
+  y<-datam[,1]; x[,-1]<-datam[,2]; x[,1]=1
+  
+  ###########################################################################################
+  ##################################  parametric mode  l#####################################
+  ###########################################################################################
+  
+  datas=data.frame(datam); datas[which(datas[,1]==0),1]=0.0001
+  #fitg<-glm.nb(y~x,link="log",data=datas)
+  #fitg$coefficients
+  fitg<-glm(y~x,inverse.gaussian(link="log"),data=datas)
+  estall4[III,1:8]=c(summary(fitg)$coefficients[1,], summary(fitg)$coefficients[2,])
+  #Estimate   Std. Error      z value     Pr(>|z|)
+}
+write.csv(estall4,"E:/DTFILE/MEPS/simulation/nbinom/IGR_NBINOM_result.csv")
+

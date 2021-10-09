@@ -1,0 +1,40 @@
+library(mgcv); library(MASS)
+library(VGAM)
+library(MASS)
+library(rmutil)
+# Gamma distribution
+# nega-bino, gamma
+# nega-bino, gamma glm fit them
+# CI
+#u3/2, u1/2, right parameter function in PNQL
+
+filedir4="E:/DTFILE/MEPS/simulation/nbinomu/"
+n=600
+datam<-matrix(0,nrow=n,ncol=2)
+iters=600
+# Generate the data
+beta=c(1, 1)
+
+for (III in 1:iters){
+  set.seed(III)
+  
+  #x=rnorm(n)
+  x=runif(n)
+  
+  eta<-beta[1]+ beta[2]* x
+  
+  datam[,1]<- rnbinom(n,size=2,mu=exp(eta))
+  datam[,2]<- x
+  
+  filename1=paste(filedir4, III, ".csv", sep="")	# Generate comma delimited file
+  
+  data.cost.2=as.matrix(datam)
+  colnames(data.cost.2)<-c('y','x')
+  write.matrix(data.cost.2, filename1, sep=",")
+  
+}
+
+colMeans(data.cost.2)
+
+
+

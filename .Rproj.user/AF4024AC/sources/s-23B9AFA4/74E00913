@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1628866320560.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "762982529",
+    "id" : "74E00913",
+    "lastKnownWriteTime" : 1633748486,
+    "last_content_update" : 1633748486031,
+    "path" : "E:/DTFILE/MEPS/fql/fql/man/fql.Rd",
+    "project_path" : "man/fql.Rd",
+    "properties" : {
+        "cursorPosition" : "25,45",
+        "scrollLine" : "15",
+        "source_window_id" : ""
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_doc"
+}

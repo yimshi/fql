@@ -1,0 +1,117 @@
+
+ginv<-function(X, tol = sqrt(.Machine$double.eps)){
+## Generalized Inverse of a Matrix
+  dnx <- dimnames(X)
+  if(is.null(dnx)) dnx <- vector("list", 2)
+  s <- svd(X)
+  nz <- s$d > tol * s$d[1]
+  structure(
+    if(any(nz)) s$v[, nz] %*% (t(s$u[, nz])/s$d[nz]) else X,
+    dimnames = dnx[2:1])
+}
+
+####################################################################################
+rm(list = ls())
+library(mgcv)
+library(MASS)
+aa=as.matrix(readRDS(file="E:/DTFILE/MEPS/MEPS14.Rds"))
+aa=data.frame(aa)
+summary(aa)
+dim(aa)
+#dummy variables for EDUCAT POVCAT
+aa$EDUCAT1=0; aa[which(aa$EDUCAT==1),36]=1;  aa$EDUCAT3=0; aa[which(aa$EDUCAT==3),37]=1;
+aa$POVCAT1=0; aa[which(aa$POVCAT==1),38]=1;  aa$POVCAT2=0; aa[which(aa$POVCAT==2),39]=1;
+aa$POVCAT3=0; aa[which(aa$POVCAT==3),40]=1;  aa$POVCAT4=0; aa[which(aa$POVCAT==4),41]=1;
+y=aa[,1]; n=length(y)
+
+## find inital estimate from glm
+ses=glm(y~ AGE+MALE+WHITE+HISP+HBP+CORHRT+STRK+EMPHY+CHBRON+CHOLES+CANCER+DIABETES+JTPAIN+ARTH+ASTH+ANYLMT+SMK+PCS+MCS+HOSPEXP+HMHLTH+
+EDUCAT1+EDUCAT3+POVCAT1+POVCAT2+POVCAT3+POVCAT4,
+family=Gamma(link="log"), data=aa)
+bnew=as.vector(ses$coefficients)
+
+#bnew
+ses
+
+## design matrix for predictors
+x=as.matrix(aa[,c(3,4,5,6,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,32,33,36,37,38,39,40,41)])
+m=length(x[1,]); x=cbind(1,x)
+
+
+preci=0.005; i2=400; i1=100;  datae<-data.frame(matrix(0,nrow=n,ncol=2));
+
+bet<-bnew    ## bet initial estimates
+
+########
+
+bn<-bet; bo<-bn+0.1;iter1<-1; DVR=1
+
+while (max(abs(bn-bo))>preci&iter1<50){
+bo<-bn; eta<-x%*%bo; mu<-exp(eta)
+
+### variance function estimate
+datae[,1]<-(y-mu)^2; datae[,2]<-mu
+#gam is for GLM additive model
+fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
+
+
+et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd));
+
+bnew<-bo; bold<-bnew+0.1; iter2<-1; Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
+
+while (max(abs(bnew-bold))>preci&iter2<i2){
+ bold<-bnew;  eta<-x%*%bold; mu=exp(eta)
+
+ Di<-matrix(0,nrow=n,ncol=m+1)
+ for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+ DV<-matrix(0,m+1,m+1); DVI<-DV;
+ for (i in 1:n){
+  DV<-DV+Di[i,]%*%t(Di[i,])/v[i]
+    DVI<-DVI+(Di[i,]%*%t(Di[i,])*(y[i]-mu[i])^2)/(v[i]^2)
+ }
+
+ DY<-c(1:(m+1))*0
+ for (i in 1:n){DY<-DY+Di[i,]*(y[i]-mu[i])/v[i]}
+
+ if(qr(DV)$rank==(m+1)){
+ bnew<-bold+qr.solve(DV,DY)
+ }else{
+ bnew<-bold+ginv(DV)%*%DY}
+ iter2<-iter2+1
+}
+
+ bn<-bnew
+ iter1<-iter1+1
+ print(paste("iter1", iter1))
+}
+
+  eta<-x%*%bn; mu<-exp(eta); datae[,1]<-(y-mu)^2; datae[,2]<-mu
+  fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
+  newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd))
+  head(newd)
+  predict(fite2,head(newd))
+  Di<-matrix(0,nrow=n,ncol=m+1)
+  for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
+  DV<-matrix(0,m+1,m+1);
+  for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
+  sigma=sum((y-mu)^2/as.vector(v))/(n-m)
+  DVR=qr(DV)$rank
+  if(DVR==(m+1)){
+  DV<-qr.solve(DV)
+ }else{
+  DV<-ginv(DV)}
+  DV=DV*sigma
+
+betas<-bn[-1];
+
+### Rec is matrix for results reporting
+rec=matrix(0,nrow=m,ncol=4)
+for (J in 1:m){
+ rec[J,2]=betas[J];                                 # regression estimate
+ rec[J,3]=sqrt(DV[J+1,J+1]);                        # s.e.
+ rec[J,4]=1-pchisq(betas[J]^2/DV[J+1,J+1],df=1)     # p-value
+}
+for(J in 1:m){rec[J,1]=colnames(x)[J+1]}
+
+write.csv(rec,file="repots400.csv")
+
