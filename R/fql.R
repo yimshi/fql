@@ -23,7 +23,7 @@
 #flexible quasi-likelihood
 
 
-fql<-function (formula, data,na.action,preci=0.00001)
+fql<-function (formula, data,na.action,preci=0.00001,initial.beta = 'Negative Bionomial')
 {
 
   n=dim(data)[1]
@@ -64,8 +64,11 @@ fql<-function (formula, data,na.action,preci=0.00001)
   ###########################################################################################
 
   # Initial step: assume constant vi for all subjects
-
-  bnew<-c(1:(m+1))*0; bold<-bnew+0.00001
+  if(initial.beta == 'Negative Binomial'){
+    fitnb<-glm.nb(formula=formula,link="log",data=data)
+    bnew<-summary(fitnb)$coefficients[,1]
+  }else {  bnew<-c(1:(m+1))*0}
+  bold<-bnew+0.1
   Di<-matrix(0,nrow=n,ncol=m+1); Dp<-matrix(0,nrow=(m+1),ncol=(m+1))
   Dp[row(Dp)==col(Dp)] <- 1; Dp[1:(m+1),1:(m+1)]<-0
   lambda<-0.01; iter2<-1
@@ -116,7 +119,7 @@ fql<-function (formula, data,na.action,preci=0.00001)
 
         # Fit the function of V
 
-        fite2<-gam(X1~s(X2,bs="ps",k=5),family=gaussian(link="identity"),data=datae)
+        fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="identity"),data=datae)
         #may have some error on estimation of v
         et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd));
         bnew=bo #bnew<-bet
