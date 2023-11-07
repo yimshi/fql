@@ -1,0 +1,33 @@
+install.packages("MASS")
+library(MASS)
+library(fql)
+library(mgcv)
+data("quine")
+# Fit a negative binomial regression model
+nb_model <- glm.nb(Days ~ Eth + Sex + Age + Lrn, data = quine)
+# Get a summary of the model
+summary(nb_model)
+fql_model <- fql(Days ~ Eth + Sex + Age + Lrn, data = quine)
+#
+fql_model[[1]]
+#
+fql_model[[2]]
+
+
+install.packages("dplyr")
+library(dplyr)
+install.packages("nycflights13")
+library(nycflights13)
+# Summarize flights data to get daily counts per origin
+daily_flights <- flights %>%
+  group_by(month, day, origin) %>%
+  summarise(flight_count = n())
+
+# View the first few rows of the summarized data
+head(daily_flights)
+# Fit a negative binomial model
+nb_model_flights <- glm.nb(flight_count ~ month + day + origin, data = daily_flights)
+# View the summary of the negative binomial model
+summary(nb_model_flights)
+fql_model_flights <- fql(flight_count ~ month + day + origin, data = daily_flights)
+fql_model_flights[[1]]
