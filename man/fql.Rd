@@ -23,7 +23,7 @@ The first element is the 'estimation', which is a dataframe includes coefficient
 
 The second element is the 'covariance', which is the matrix of variance-covariance of the regression coefficients;
 
-The third element is the meanerror;
+The third element is the 'meanerror', which is the mean of fitted error;
 
 The fourth element is the 'step', which shows the method used to estimate the variance. '0' means that the varicance is estimated by p-spline. '1' for kernel function. '2' uses another kernel method. '3' uses vi=1 for all subjects;
 
