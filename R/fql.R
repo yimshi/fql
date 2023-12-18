@@ -23,7 +23,7 @@
 #flexible quasi-likelihood
 
 
-fql<-function (formula, data,na.action,preci=0.00001,initial.beta = 'Negative Bionomial')
+fql<-function (formula, data,na.action,preci=0.00001,initial.beta = 'Negative Binomial')
 {
 
   n=dim(data)[1]
