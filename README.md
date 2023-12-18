@@ -1,17 +1,22 @@
 # fql
 # install the package
-library(devtools)
+library(devtools) 
+
 install_github('yimshi/fql')
 
 # run an example
 library(MASS)
+
 library(fql)
+
 library(mgcv)
+
 data("quine")
 # Fit a negative binomial regression model
 nb_model <- glm.nb(Days ~ Eth + Sex + Age + Lrn, data = quine)
 # Get a summary of the model
 summary(nb_model)
+
 fql_model <- fql(Days ~ Eth + Sex + Age + Lrn, data = quine)
 # 'estimation', which is a dataframe includes coefficients, standard error and p-value
 fql_model[[1]]
