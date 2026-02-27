@@ -1,0 +1,222 @@
+---
+title: "Introduction to fql: Flexible Quasi-Likelihood Models"
+author: "Yiming Shi"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to fql: Flexible Quasi-Likelihood Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Overview
+
+The **fql** package provides flexible quasi-likelihood (FQL) generalized linear
+models for count data with heteroscedastic variance. FQL is particularly useful
+for microbiome abundance count data, where:
+
+- Standard Poisson models underestimate variance (overdispersion)
+- Negative binomial models may not capture the true mean-variance relationship
+- The true distribution is unknown
+
+FQL avoids distributional assumptions by modeling the variance as an unknown
+smooth function of the mean, estimated nonparametrically via P-splines.
+
+## Quick Start
+
+```{r quickstart}
+library(fql)
+
+# Use the quine dataset (student absenteeism counts)
+data(quine, package = "MASS")
+
+# Fit an FQL model
+fit <- fql(Days ~ Eth + Sex + Age + Lrn, data = quine)
+summary(fit)
+```
+
+## Comparison with Standard Models
+
+Let's compare FQL with negative binomial and Poisson GLMs:
+
+```{r comparison}
+library(MASS)
+
+# Negative binomial GLM
+nb_fit <- glm.nb(Days ~ Eth + Sex + Age + Lrn, data = quine)
+
+# Poisson GLM
+pois_fit <- glm(Days ~ Eth + Sex + Age + Lrn, data = quine, family = poisson)
+
+# Compare coefficients
+coef_comparison <- data.frame(
+  FQL = coef(fit),
+  NB = coef(nb_fit),
+  Poisson = coef(pois_fit)
+)
+round(coef_comparison, 4)
+```
+
+```{r se-comparison}
+# Compare standard errors
+se_comparison <- data.frame(
+  FQL = fit$se,
+  NB = summary(nb_fit)$coefficients[, "Std. Error"],
+  Poisson = summary(pois_fit)$coefficients[, "Std. Error"]
+)
+round(se_comparison, 4)
+```
+
+Notice that Poisson standard errors tend to be smaller (because Poisson ignores
+overdispersion), while FQL and NB provide more appropriate uncertainty estimates.
+
+## Confidence Intervals
+
+```{r confint}
+confint(fit)
+
+# 99% confidence intervals
+confint(fit, level = 0.99)
+```
+
+## Predictions
+
+```{r predictions}
+# Predictions on response scale (mu)
+head(predict(fit, type = "response"))
+
+# Predictions on link scale (eta = log(mu))
+head(predict(fit, type = "link"))
+
+# Predictions for new data
+newdata <- data.frame(
+  Eth = factor(c("A", "N"), levels = levels(quine$Eth)),
+  Sex = factor(c("M", "F"), levels = levels(quine$Sex)),
+  Age = factor(c("F1", "F2"), levels = levels(quine$Age)),
+  Lrn = factor(c("AL", "SL"), levels = levels(quine$Lrn))
+)
+predict(fit, newdata = newdata, type = "response")
+```
+
+## Diagnostic Plots
+
+```{r diagnostics, fig.height = 8}
+par(mfrow = c(2, 2))
+plot(fit, ask = FALSE)
+```
+
+The four diagnostic plots are:
+
+1. **Residuals vs Fitted**: Checks for systematic patterns in residuals
+2. **Q-Q Plot**: Assesses normality of Pearson residuals
+3. **Scale-Location**: Detects remaining heteroscedasticity
+4. **Variance Function**: Shows the estimated V(mu) relationship
+
+## Working with Microbiome Data
+
+The package includes a simulated microbiome dataset for demonstration:
+
+```{r microbiome-data}
+data(sim_microbiome)
+str(sim_microbiome, max.level = 1)
+
+# OTU table dimensions
+dim(sim_microbiome$otu_table)
+
+# Which OTUs are truly differential?
+sim_microbiome$taxa_info
+```
+
+### Single Taxon Analysis
+
+```{r single-taxon}
+# Prepare data for a single OTU
+dat <- sim_microbiome$sample_data
+dat$count <- sim_microbiome$otu_table[, "OTU1"]
+dat$log_total <- log(dat$total_reads)
+
+# Fit FQL with offset for library size normalization
+fit_otu <- fql(count ~ group + age + offset(log_total), data = dat)
+summary(fit_otu)
+```
+
+### Multi-Taxon Analysis with FDR Correction
+
+The `fql_multi()` function fits FQL to each taxon and adjusts p-values:
+
+```{r multi-taxon}
+results <- fql_multi(
+  otu_table = sim_microbiome$otu_table,
+  formula = ~ group + age + offset(log(total_reads)),
+  data = sim_microbiome$sample_data,
+  p.adjust.method = "BH",
+  prevalence.filter = 0.25,
+  verbose = FALSE
+)
+
+# Show results for group effect
+group_results <- results[results$covariate == "groupTreatment", ]
+group_results[, c("taxon", "estimate", "se", "p_value", "p_adjusted")]
+```
+
+## Model Options
+
+### Initialization Methods
+
+```{r init-methods, eval = FALSE}
+# Default: initialize from negative binomial fit
+fit_nb <- fql(Days ~ Eth + Sex, data = quine, init.method = "nb")
+
+# Alternative: initialize from zeros
+fit_zero <- fql(Days ~ Eth + Sex, data = quine, init.method = "zero")
+```
+
+### Variance Estimation Methods
+
+```{r var-methods, eval = FALSE}
+# Default: automatic (tries spline, kernel, constant in order)
+fit_auto <- fql(Days ~ Eth + Sex, data = quine, var.method = "auto")
+
+# Force specific method
+fit_spline <- fql(Days ~ Eth + Sex, data = quine, var.method = "spline")
+fit_kernel <- fql(Days ~ Eth + Sex, data = quine, var.method = "kernel")
+fit_const <- fql(Days ~ Eth + Sex, data = quine, var.method = "constant")
+```
+
+## Mathematical Background
+
+The FQL model assumes:
+
+$$\log(\mu_i) = X_i^T \beta$$
+$$\text{Var}(Y_i) = V(\mu_i)$$
+
+where $V(\cdot)$ is an unknown smooth function. The estimation alternates
+between:
+
+1. Estimating $V(\mu)$ via P-spline regression of squared residuals on $\hat{\mu}$
+2. Re-estimating $\beta$ via IRLS with variance weights
+
+Inference uses a sandwich (robust) covariance estimator:
+
+$$\text{Var}(\hat{\beta}) = A^{-1} B A^{-1}$$
+
+where $A = \sum_i D_i D_i^T V_i^{-1}$ and
+$B = \sum_i D_i D_i^T (y_i - \mu_i)^2 V_i^{-2}$.
+
+For full details, see Shi et al. (2023), *Statistics in Medicine*, 42(25), 4632-4643.
+
+## References
+
+Shi, Y., Li, H., Wang, C., Chen, J., Jiang, H., Shih, Y.-C. T., Zhang, H.,
+Song, Y., Feng, Y., & Liu, L. (2023). A flexible quasi-likelihood model for
+microbiome abundance count data. *Statistics in Medicine*, 42(25), 4632-4643.
+doi: [10.1002/sim.9880](https://doi.org/10.1002/sim.9880)

@@ -1,13 +1,48 @@
 Package: fql
 Type: Package
-Title: A package for fitting flexible quasi-likelihood generalized linear regression model
-Version: 1.0.1
-Author: c( person("Yiming", "Shi", email = "yimingshi@wustl.edu", role = c("cre", "aut")) )
-Description: fql is a R package to fit the flexible quasi-likelihood GLM model which doesn't make assumption on the distribution and focus on heteroskedasticity.
+Title: Flexible Quasi-Likelihood Models for Count Data
+Version: 2.0.0
+Authors@R: c(
+    person("Yiming", "Shi", email = "yimingshi@wustl.edu",
+           role = c("cre", "aut")),
+    person("Lei", "Liu", email = "lei.liu@wustl.edu",
+           role = "aut",
+           comment = c(ORCID = "0000-0003-1844-338X")),
+    person("Huilin", "Li", role = "aut"),
+    person("Chan", "Wang", role = "aut"),
+    person("Jun", "Chen", role = "aut"),
+    person("Hongmei", "Jiang", role = "aut"),
+    person("Ya-Chen T.", "Shih", role = "aut"),
+    person("Haixiang", "Zhang", role = "aut",
+           comment = c(ORCID = "0000-0002-7311-5605")),
+    person("Yizhe", "Song", role = "aut",
+           comment = c(ORCID = "0000-0001-8760-6432")),
+    person("Yang", "Feng", role = "aut")
+    )
+Description: Fits flexible quasi-likelihood (FQL) generalized linear models
+    for count data with heteroscedastic variance. The variance is modeled as
+    an unknown smooth function of the mean, estimated nonparametrically via
+    P-splines or kernel smoothing. This avoids distributional assumptions
+    while properly accounting for overdispersion, making it particularly
+    suitable for microbiome abundance count data. Methods are described in
+    Shi et al. (2023) <doi:10.1002/sim.9880>.
+License: GPL (>= 3) + file LICENSE
+URL: https://github.com/yimshi/fql
+BugReports: https://github.com/yimshi/fql/issues
 Encoding: UTF-8
 LazyData: true
-Depends:mgcv, MASS
-License: GPL (>= 3) + file LICENSE
-
-Suggests: testthat
+Depends:
+    R (>= 3.5.0)
+Imports:
+    MASS,
+    mgcv,
+    stats,
+    graphics,
+    grDevices
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 7.3.3
 Config/testthat/edition: 3

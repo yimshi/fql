@@ -1,32 +1,54 @@
-# fql
-# install the package
-library(devtools) 
+# fql: Flexible Quasi-Likelihood Models for Count Data
 
-install_github('yimshi/fql')
+<!-- badges: start -->
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+<!-- badges: end -->
 
-# run an example
-library(MASS)
+**fql** fits flexible quasi-likelihood (FQL) generalized linear models for count
+data with heteroscedastic variance. The variance is modeled as an unknown smooth
+function of the mean, estimated nonparametrically via P-splines or kernel
+smoothing. This is particularly useful for microbiome abundance count data.
 
+## Installation
+
+```r
+# Install from GitHub
+devtools::install_github("yimshi/fql")
+```
+
+## Quick Start
+
+```r
 library(fql)
+data(quine, package = "MASS")
 
-library(mgcv)
+# Fit FQL model
+fit <- fql(Days ~ Eth + Sex + Age + Lrn, data = quine)
+summary(fit)
 
-data("quine")
-# Fit a negative binomial regression model
-nb_model <- glm.nb(Days ~ Eth + Sex + Age + Lrn, data = quine)
-# Get a summary of the model
-summary(nb_model)
+# S3 methods work as expected
+coef(fit)
+confint(fit)
+predict(fit, type = "response")
+plot(fit)
+```
 
-fql_model <- fql(Days ~ Eth + Sex + Age + Lrn, data = quine)
-# 'estimation', which is a dataframe includes coefficients, standard error and p-value
-fql_model[[1]]
-# 'covariance', which is the matrix of variance-covariance of the regression coefficients
-fql_model[[2]]
-# 'meanerror', which is the mean of fitted error
-fql_model[[3]]
-# 'step', which shows the method used to estimate the variance. '0' means that the varicance is estimated by p-spline. '1' for kernel function. '2' uses another kernel method. '3' uses vi=1 for all subjects
-fql_model[[4]]
-# estimation of the mean
-fql_model[[5]]
-# the estimation of the variance.
-fql_model[[6]]
+## Multi-Taxon Analysis
+
+```r
+data(sim_microbiome)
+
+results <- fql_multi(
+  otu_table = sim_microbiome$otu_table,
+  formula = ~ group + age + offset(log(total_reads)),
+  data = sim_microbiome$sample_data,
+  p.adjust.method = "BH"
+)
+```
+
+## Citation
+
+Shi, Y., Li, H., Wang, C., Chen, J., Jiang, H., Shih, Y.-C. T., Zhang, H.,
+Song, Y., Feng, Y., & Liu, L. (2023). A flexible quasi-likelihood model for
+microbiome abundance count data. *Statistics in Medicine*, 42(25), 4632-4643.
+[doi:10.1002/sim.9880](https://doi.org/10.1002/sim.9880)

@@ -1,0 +1,22 @@
+bibentry(
+  bibtype  = "Article",
+  title    = "A flexible quasi-likelihood model for microbiome abundance count data",
+  author   = c(
+    person("Yiming", "Shi"),
+    person("Huilin", "Li"),
+    person("Chan", "Wang"),
+    person("Jun", "Chen"),
+    person("Hongmei", "Jiang"),
+    person("Ya-Chen T.", "Shih"),
+    person("Haixiang", "Zhang"),
+    person("Yizhe", "Song"),
+    person("Yang", "Feng"),
+    person("Lei", "Liu")
+  ),
+  journal  = "Statistics in Medicine",
+  year     = "2023",
+  volume   = "42",
+  number   = "25",
+  pages    = "4632--4643",
+  doi      = "10.1002/sim.9880"
+)
