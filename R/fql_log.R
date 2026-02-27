@@ -30,6 +30,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
   p<-2
   i1<-100
   i2<-100
+  eps<-1e-8
   bw=(4/3)^(1/5)*(n^(-1/5))
   #m=length(all.vars(formula))-1
 
@@ -37,7 +38,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
   mt <- attr(mf, "terms")
   y <- model.response(mf, "numeric")
   options(warn=-1)
-  x <- model.matrix(mt, mf, contrasts)
+  x <- model.matrix(mt, mf)
   options(warn=1)
   m=dim(x)[2]-1
   #  x2<-matrix(as.numeric(x),ncol=m+1,nrow=n)
@@ -119,6 +120,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
         fite2<-gam(X1~s(X2,bs="ps"),family=gaussian(link="log"),data=datae)
         #may have some error on estimation of v
         et<-sort(mu); newd<-data.frame(X2=mu); v<-exp(predict(fite2,newd));
+        v<-pmax(v, eps)
         bnew=bo #bnew<-bet
         bold<-bnew+0.1; iter2<-1
         Di<-matrix(0,nrow=n,ncol=m+1)
@@ -207,6 +209,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
           mu<-exp(eta);er=(y-mu)^2; v=mu*0
 
           for (i in 1:n)  {v[i]=varest(mu[i],mu,er,bw+1)}
+          v<-pmax(v, eps)
 
           bnew=bo #bnew<-bet
           bold<-bnew+0.1; iter2<-1
@@ -220,8 +223,8 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
             bold<-bnew
             #offset
             if (!is.null(offset)){
-              eta<-x%*%bo+as.matrix(offset,nrow=length(offset))
-            }else {eta<-x%*%bo}
+              eta<-x%*%bold+as.matrix(offset,nrow=length(offset))
+            }else {eta<-x%*%bold}
             #link function
             #if(link=="log"){
               mu=exp(eta)
@@ -251,6 +254,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
         }else {eta<-x%*%bn}
         mu<-exp(eta); er=(y-mu)^2; v=mu*0
         for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+1)}
+        v<-pmax(v, eps)
         Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
         DV<-matrix(0,m+1,m+1);
         for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
@@ -300,6 +304,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
 
 
             for (i in 1:n)  {v[i]=varest(mu[i],mu,er,bw+3)}
+            v<-pmax(v, eps)
 
             bnew=bo #bnew<-bet
             bold<-bnew+0.1; iter2<-1
@@ -345,6 +350,7 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
           }else {eta<-x%*%bn}
           mu<-exp(eta); er=(y-mu)^2; v=mu*0
           for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+          v<-pmax(v, eps)
           Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
           DV<-matrix(0,m+1,m+1);
           for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
@@ -433,9 +439,10 @@ fql_log<-function (formula, data,na.action,preci=0.00001)
 
             if (!is.null(offset)){
               eta<-x%*%bn+as.matrix(offset,nrow=length(offset))
-            }else {eta<-x%*%b}
+            }else {eta<-x%*%bn}
             mu<-exp(eta); er=(y-mu)^2; v=mu*0
             for (i in 1:n){v[i]=varest(mu[i],mu,er,bw+2)}
+          v<-pmax(v, eps)
             Di<-matrix(0,nrow=n,ncol=m+1); for (i in 1:n){Di[i,]<- mu[i]*x[i,]}
             DV<-matrix(0,m+1,m+1);
             for (i in 1:n){DV<-DV+Di[i,]%*%t(Di[i,])/v[i]}
