@@ -1,13 +1,18 @@
 Package: fql
 Type: Package
-Title: A package for fitting flexible quasi-likelihood generalized linear regression model
-Version: 1.0.1
-Author: c( person("Yiming", "Shi", email = "yimingshi@wustl.edu", role = c("cre", "aut")) )
-Description: fql is a R package to fit the flexible quasi-likelihood GLM model which doesn't make assumption on the distribution and focus on heteroskedasticity.
+Title: Flexible Quasi-Likelihood Generalized Linear Regression for Count Data
+Version: 1.0.2
+Authors@R: c(
+    person("Yiming", "Shi", email = "yimingshi@wustl.edu", role = c("aut", "cre"))
+)
+Description: Fits flexible quasi-likelihood generalized linear models for count
+    outcomes with heteroskedasticity-aware variance estimation.
+License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
-Depends:mgcv, MASS
-License: GPL (>= 3) + file LICENSE
-
-Suggests: testthat
+Depends: mgcv, MASS
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown, pkgdown
+VignetteBuilder: knitr
+URL: https://github.com/yimshi/fql
+BugReports: https://github.com/yimshi/fql/issues
 Config/testthat/edition: 3

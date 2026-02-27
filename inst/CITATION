@@ -1,0 +1,41 @@
+bibentry(
+  bibtype = "Article",
+  title = "Generalized linear model for count outcomes by the flexible quasi-likelihood method in microbiome studies",
+  author = c(
+    person("Yiming", "Shi"),
+    person("Jian", "Kang"),
+    person("Lifang", "Hou"),
+    person("Bhramar", "Mukherjee")
+  ),
+  journal = "Statistics in Medicine",
+  year = "2023",
+  volume = "42",
+  number = "14",
+  pages = "2376--2394",
+  doi = "10.1002/sim.9732"
+)
+
+citHeader("To cite package 'fql' in publications use:")
+
+citEntry(
+  entry = "Article",
+  title = "Generalized linear model for count outcomes by the flexible quasi-likelihood method in microbiome studies",
+  author = personList(
+    person("Yiming", "Shi"),
+    person("Jian", "Kang"),
+    person("Lifang", "Hou"),
+    person("Bhramar", "Mukherjee")
+  ),
+  journal = "Statistics in Medicine",
+  year = "2023",
+  volume = "42",
+  number = "14",
+  pages = "2376--2394",
+  doi = "10.1002/sim.9732",
+  textVersion = paste(
+    "Shi Y, Kang J, Hou L, Mukherjee B (2023).",
+    "'Generalized linear model for count outcomes by the flexible quasi-likelihood",
+    "method in microbiome studies.' Statistics in Medicine, 42(14), 2376-2394.",
+    "doi:10.1002/sim.9732"
+  )
+)
